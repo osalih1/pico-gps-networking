@@ -1,0 +1,11 @@
+/Users/osalih/Repos/pico-gps-networking/pico-image/target/thumbv6m-none-eabi/debug/deps/libublox-8eab231ca53eef61.rmeta: /Users/osalih/.cargo/registry/src/index.crates.io-6f17d22bba15001f/ublox-0.4.5/src/lib.rs /Users/osalih/.cargo/registry/src/index.crates.io-6f17d22bba15001f/ublox-0.4.5/src/error.rs /Users/osalih/.cargo/registry/src/index.crates.io-6f17d22bba15001f/ublox-0.4.5/src/parser.rs /Users/osalih/.cargo/registry/src/index.crates.io-6f17d22bba15001f/ublox-0.4.5/src/ubx_packets.rs /Users/osalih/.cargo/registry/src/index.crates.io-6f17d22bba15001f/ublox-0.4.5/src/ubx_packets/cfg_val.rs /Users/osalih/.cargo/registry/src/index.crates.io-6f17d22bba15001f/ublox-0.4.5/src/ubx_packets/packets.rs /Users/osalih/.cargo/registry/src/index.crates.io-6f17d22bba15001f/ublox-0.4.5/src/ubx_packets/types.rs
+
+/Users/osalih/Repos/pico-gps-networking/pico-image/target/thumbv6m-none-eabi/debug/deps/ublox-8eab231ca53eef61.d: /Users/osalih/.cargo/registry/src/index.crates.io-6f17d22bba15001f/ublox-0.4.5/src/lib.rs /Users/osalih/.cargo/registry/src/index.crates.io-6f17d22bba15001f/ublox-0.4.5/src/error.rs /Users/osalih/.cargo/registry/src/index.crates.io-6f17d22bba15001f/ublox-0.4.5/src/parser.rs /Users/osalih/.cargo/registry/src/index.crates.io-6f17d22bba15001f/ublox-0.4.5/src/ubx_packets.rs /Users/osalih/.cargo/registry/src/index.crates.io-6f17d22bba15001f/ublox-0.4.5/src/ubx_packets/cfg_val.rs /Users/osalih/.cargo/registry/src/index.crates.io-6f17d22bba15001f/ublox-0.4.5/src/ubx_packets/packets.rs /Users/osalih/.cargo/registry/src/index.crates.io-6f17d22bba15001f/ublox-0.4.5/src/ubx_packets/types.rs
+
+/Users/osalih/.cargo/registry/src/index.crates.io-6f17d22bba15001f/ublox-0.4.5/src/lib.rs:
+/Users/osalih/.cargo/registry/src/index.crates.io-6f17d22bba15001f/ublox-0.4.5/src/error.rs:
+/Users/osalih/.cargo/registry/src/index.crates.io-6f17d22bba15001f/ublox-0.4.5/src/parser.rs:
+/Users/osalih/.cargo/registry/src/index.crates.io-6f17d22bba15001f/ublox-0.4.5/src/ubx_packets.rs:
+/Users/osalih/.cargo/registry/src/index.crates.io-6f17d22bba15001f/ublox-0.4.5/src/ubx_packets/cfg_val.rs:
+/Users/osalih/.cargo/registry/src/index.crates.io-6f17d22bba15001f/ublox-0.4.5/src/ubx_packets/packets.rs:
+/Users/osalih/.cargo/registry/src/index.crates.io-6f17d22bba15001f/ublox-0.4.5/src/ubx_packets/types.rs:

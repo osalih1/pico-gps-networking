@@ -1,0 +1,1 @@
+/Users/osalih/Repos/pico-gps-networking/pico-image/target/thumbv6m-none-eabi/debug/rp2040-project-template: /Users/osalih/Repos/pico-gps-networking/pico-image/build.rs /Users/osalih/Repos/pico-gps-networking/pico-image/memory.x /Users/osalih/Repos/pico-gps-networking/pico-image/src/main.rs

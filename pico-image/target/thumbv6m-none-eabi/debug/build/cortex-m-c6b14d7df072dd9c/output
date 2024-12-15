@@ -1,0 +1,4 @@
+cargo:rustc-link-lib=static=cortex-m
+cargo:rustc-link-search=/Users/osalih/Repos/bwos-aspirin-2024-03/mini-projects/01-device-driver/pico-image/target/thumbv6m-none-eabi/debug/build/cortex-m-c6b14d7df072dd9c/out
+cargo:rustc-cfg=cortex_m
+cargo:rustc-cfg=armv6m

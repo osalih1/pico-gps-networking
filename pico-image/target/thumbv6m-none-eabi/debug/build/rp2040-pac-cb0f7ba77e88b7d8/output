@@ -1,0 +1,3 @@
+cargo:rustc-link-search=/Users/osalih/Repos/bwos-aspirin-2024-03/mini-projects/01-device-driver/pico-image/target/thumbv6m-none-eabi/debug/build/rp2040-pac-cb0f7ba77e88b7d8/out
+cargo:rerun-if-changed=device.x
+cargo:rerun-if-changed=build.rs
