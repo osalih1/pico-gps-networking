@@ -1,119 +1,135 @@
 #![no_std]
 #![no_main]
+#![allow(async_fn_in_trait)]
 
-use cortex_m_rt::entry;
-use panic_halt as _; 
-use rp_pico::hal::{
-    clocks::init_clocks_and_plls,
-    gpio::Pins,
-    i2c::I2C,
-    pac,
-    sio::Sio,
-    usb::UsbBus,
-    watchdog::Watchdog,
-    fugit::RateExtU32,
-};
-use embedded_hal_0_2::prelude::{
-    _embedded_hal_blocking_i2c_Read,
-    _embedded_hal_blocking_i2c_Write
-};
-use usb_device::prelude::*;
-use usbd_serial::SerialPort;
-use rp_pico::XOSC_CRYSTAL_FREQ;
-use usb_device::class_prelude::UsbBusAllocator;
-use heapless::Vec;
+//! This example uses the RP Pico W board Wifi chip (cyw43).
+//! Creates an Access point Wifi network and creates a TCP endpoint on port 1234.
 
-// U-blox specific UBX message configuration commands
-const UBX_CFG_MSG: &[u8] = &[0xB5, 0x62, 0x06, 0x01, 0x08, 0x00, 0xF0, 0x00, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01];
-const UBX_CFG_RATE: &[u8] = &[0xB5, 0x62, 0x06, 0x08, 0x06, 0x00, 0x64, 0x00, 0x01, 0x00, 0x01, 0x00];
-const GPS_ADDRESS: u8 = 0x42;
+use core::str::from_utf8;
 
-#[entry]
-fn main() -> ! {
-    let mut pac = pac::Peripherals::take().unwrap();
-    let mut watchdog = Watchdog::new(pac.WATCHDOG);
-    let clocks = init_clocks_and_plls(
-        XOSC_CRYSTAL_FREQ,
-        pac.XOSC,
-        pac.CLOCKS,
-        pac.PLL_SYS,
-        pac.PLL_USB,
-        &mut pac.RESETS,
-        &mut watchdog,
-    )
-    .expect("Clocks should initialize correctly");
+use cyw43_pio::PioSpi;
+use defmt::*;
+use embassy_executor::Spawner;
+use embassy_net::tcp::TcpSocket;
+use embassy_net::{Config, StackResources};
+use embassy_rp::bind_interrupts;
+use embassy_rp::clocks::RoscRng;
+use embassy_rp::gpio::{Level, Output};
+use embassy_rp::peripherals::{DMA_CH0, PIO0};
+use embassy_rp::pio::{InterruptHandler, Pio};
+use embassy_time::Duration;
+use embedded_io_async::Write;
+use rand::RngCore;
+use static_cell::StaticCell;
+use {defmt_rtt as _, panic_probe as _};
 
-    let sio = Sio::new(pac.SIO);
-    let pins = Pins::new(
-        pac.IO_BANK0,
-        pac.PADS_BANK0,
-        sio.gpio_bank0,
-        &mut pac.RESETS
-    );
+bind_interrupts!(struct Irqs {
+    PIO0_IRQ_0 => InterruptHandler<PIO0>;
+});
 
-    // Set up I2C (GPIO16 for SDA and GPIO17 for SCL)
-    let mut i2c = I2C::i2c0(
-        pac.I2C0,
-        pins.gpio16.reconfigure(), // SDA
-        pins.gpio17.reconfigure(), // SCL
-        400.kHz(),
-        &mut pac.RESETS,
-        &clocks.peripheral_clock,
-    );
+#[embassy_executor::task]
+async fn cyw43_task(runner: cyw43::Runner<'static, Output<'static>, PioSpi<'static, PIO0, 0, DMA_CH0>>) -> ! {
+    runner.run().await
+}
 
-    // Set up USB serial
-    let usb_bus = UsbBusAllocator::new(UsbBus::new(
-        pac.USBCTRL_REGS,
-        pac.USBCTRL_DPRAM,
-        clocks.usb_clock,
-        true,
-        &mut pac.RESETS,
-    ));
+#[embassy_executor::task]
+async fn net_task(mut runner: embassy_net::Runner<'static, cyw43::NetDriver<'static>>) -> ! {
+    runner.run().await
+}
 
-    let mut serial = SerialPort::new(&usb_bus);
-    let mut usb_dev = UsbDeviceBuilder::new(&usb_bus, UsbVidPid(0x16c0, 0x27dd))
-        .device_class(2) // CDC class
-        .build();
+#[embassy_executor::main]
+async fn main(spawner: Spawner) {
+    info!("Hello World!");
 
-    // Initial configuration of u-blox module
-    // 1. Configure NMEA message output
-    i2c.write(GPS_ADDRESS, UBX_CFG_MSG).unwrap();
-    
-    // 2. Set navigation rate to 10Hz (100ms)
-    i2c.write(GPS_ADDRESS, UBX_CFG_RATE).unwrap();
+    let p = embassy_rp::init(Default::default());
+    let mut rng = RoscRng;
 
-    // Buffer for reading GNSS data
-    let mut nmea_buffer: Vec<u8, 256> = Vec::new();
+    let fw = include_bytes!("../../cyw43-firmware/43439A0.bin");
+    let clm = include_bytes!("../../cyw43-firmware/43439A0_clm.bin");
+
+    // To make flashing faster for development, you may want to flash the firmwares independently
+    // at hardcoded addresses, instead of baking them into the program with `include_bytes!`:
+    //     probe-rs download 43439A0.bin --binary-format bin --chip RP2040 --base-address 0x10100000
+    //     probe-rs download 43439A0_clm.bin --binary-format bin --chip RP2040 --base-address 0x10140000
+    //let fw = unsafe { core::slice::from_raw_parts(0x10100000 as *const u8, 230321) };
+    //let clm = unsafe { core::slice::from_raw_parts(0x10140000 as *const u8, 4752) };
+
+    let pwr = Output::new(p.PIN_23, Level::Low);
+    let cs = Output::new(p.PIN_25, Level::High);
+    let mut pio = Pio::new(p.PIO0, Irqs);
+    let spi = PioSpi::new(&mut pio.common, pio.sm0, pio.irq0, cs, p.PIN_24, p.PIN_29, p.DMA_CH0);
+
+    static STATE: StaticCell<cyw43::State> = StaticCell::new();
+    let state = STATE.init(cyw43::State::new());
+    let (net_device, mut control, runner) = cyw43::new(state, pwr, spi, fw).await;
+    unwrap!(spawner.spawn(cyw43_task(runner)));
+
+    control.init(clm).await;
+    control
+        .set_power_management(cyw43::PowerManagementMode::PowerSave)
+        .await;
+
+    // Use a link-local address for communication without DHCP server
+    let config = Config::ipv4_static(embassy_net::StaticConfigV4 {
+        address: embassy_net::Ipv4Cidr::new(embassy_net::Ipv4Address::new(169, 254, 1, 1), 16),
+        dns_servers: heapless::Vec::new(),
+        gateway: None,
+    });
+
+    // Generate random seed
+    let seed = rng.next_u64();
+
+    // Init network stack
+    static RESOURCES: StaticCell<StackResources<3>> = StaticCell::new();
+    let (stack, runner) = embassy_net::new(net_device, config, RESOURCES.init(StackResources::new()), seed);
+
+    unwrap!(spawner.spawn(net_task(runner)));
+
+    //control.start_ap_open("cyw43", 5).await;
+    control.start_ap_wpa2("cyw43", "password", 5).await;
+
+    // And now we can use it!
+
+    let mut rx_buffer = [0; 4096];
+    let mut tx_buffer = [0; 4096];
+    let mut buf = [0; 4096];
 
     loop {
-        // Poll USB device
-        if usb_dev.poll(&mut [&mut serial]) {
-            // Attempt to read available bytes from GNSS
-            let mut chunk = [0u8; 64];
-            match i2c.read(GPS_ADDRESS, &mut chunk) {
-                Ok(_) => {
-                    // Process received bytes
-                    for &byte in chunk.iter().filter(|&&b| b != 0) {
-                        // Collect NMEA sentences
-                        if byte == b'$' {
-                            // Start of a new sentence
-                            nmea_buffer.clear();
-                        }
-                        
-                        let _ = nmea_buffer.push(byte);
-                        
-                        // Check for complete sentence
-                        if byte == b'\n' {
-                            // Send complete NMEA sentence over USB
-                            let _ = serial.write(&nmea_buffer);
-                            let _ = serial.flush();
-                        }
-                    }
+        let mut socket = TcpSocket::new(stack, &mut rx_buffer, &mut tx_buffer);
+        socket.set_timeout(Some(Duration::from_secs(10)));
+
+        control.gpio_set(0, false).await;
+        info!("Listening on TCP:1234...");
+        if let Err(e) = socket.accept(1234).await {
+            warn!("accept error: {:?}", e);
+            continue;
+        }
+
+        info!("Received connection from {:?}", socket.remote_endpoint());
+        control.gpio_set(0, true).await;
+
+        loop {
+            let n = match socket.read(&mut buf).await {
+                Ok(0) => {
+                    warn!("read EOF");
+                    break;
                 }
-                Err(_) => {
-                    let _ = serial.write(b"I2C Read Error\n");
+                Ok(n) => n,
+                Err(e) => {
+                    warn!("read error: {:?}", e);
+                    break;
                 }
-            }
+            };
+
+            info!("rxd {}", from_utf8(&buf[..n]).unwrap());
+
+            match socket.write_all(&buf[..n]).await {
+                Ok(()) => {}
+                Err(e) => {
+                    warn!("write error: {:?}", e);
+                    break;
+                }
+            };
         }
     }
 }
